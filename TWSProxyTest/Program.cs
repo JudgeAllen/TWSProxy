@@ -22,9 +22,9 @@ namespace TWSProxyTest
 
         static void Main(string[] args)
         {
-            IBProxy proxy = new IBProxy(false);
+            IBProxy proxy = new IBProxy(true);
 
-            proxy.connect("127.0.0.1", 7496, 1);
+            proxy.connect("127.0.0.1", 7496, 10);
 
             proxy.OnPriceEvent += OnPrice;
             proxy.OnGreeksEvent += OnGreeks;

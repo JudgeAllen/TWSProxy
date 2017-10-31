@@ -169,7 +169,8 @@ namespace TWSProxy
         {
             if (isDebug)
             {
-                Console.WriteLine("Tick Price. Ticker Id:" + msg.RequestId + ", Symbol: " + dicAssets[msg.RequestId].Con.Symbol + ", Type: " + TickType.getField(msg.Field) + ", Price: " + msg.Price + ", Pre-Open: " + msg.Attribs.PreOpen);
+                Console.WriteLine("Tick Price. Ticker Id:{1}, Symbol: {2}, Type: {3}, Price: {4}, Pre-Open: {4}",
+                    msg.RequestId, dicAssets[msg.RequestId].Con.Symbol, TickType.getField(msg.Field), msg.Price, msg.Attribs.PreOpen);
             }
 
             switch (msg.Field)
@@ -205,7 +206,8 @@ namespace TWSProxy
         {
             if (isDebug)
             {
-                Console.WriteLine("Tick Size. Ticker Id:" + msg.RequestId + ", Symbol: " + dicAssets[msg.RequestId].Con.Symbol + ", Type: " + TickType.getField(msg.Field) + ", Size: " + msg.Size);
+                Console.WriteLine("Tick Size. Ticker Id: {0}, Symbol: {1}, Type: {2}, Size: {3}", 
+                    msg.RequestId, dicAssets[msg.RequestId].Con.Symbol, TickType.getField(msg.Field), msg.Size);
             }
 
             switch (msg.Field)
@@ -223,8 +225,10 @@ namespace TWSProxy
         {
             if (isDebug)
             {
-                Console.WriteLine("Tick Size. Ticker Id:" + msg.RequestId + ", Symbol: " + dicAssets[msg.RequestId].Con.Symbol + ", Type: " + TickType.getField(msg.Field));
-                Console.WriteLine("Delta: " + msg.Delta + ", Gamma: " + msg.Gamma + ", Vega: " + msg.Vega + ", Theta: " + ", IV: " + msg.ImpliedVolatility + ", OptPrice:" + msg.OptPrice + ", PvDividend: " + msg.PvDividend + ", UndPrice: " + msg.UndPrice);
+                Console.WriteLine("Tick Option. Ticker Id: {0}, Symbol: {1}, Type: {2}", 
+                    msg.RequestId, dicAssets[msg.RequestId].Con.Symbol, TickType.getField(msg.Field));
+                Console.WriteLine("Delta: {0}, Gamma: {1}, Vega: {2}, Theta: {3}, IV: {4}, OptPrice: {5}, PvDividend: {6}, UndPrice: {7}", 
+                    msg.Delta, msg.Gamma, msg.Vega, msg.Theta, msg.ImpliedVolatility, msg.OptPrice, msg.PvDividend, msg.UndPrice);
             }
 
             dicAssets[msg.RequestId].ImpliedVolatility = msg.ImpliedVolatility;
@@ -275,6 +279,40 @@ namespace TWSProxy
 
             dicAssets[message.RequestId].Con = con;
 
+            if (con.SecType == "STK")
+            {
+                dicAssets[message.RequestId].ID = string.Format("STK.{0}", con.Symbol);
+            }
+
+            if (con.SecType == "IND")
+            {
+                dicAssets[message.RequestId].ID = string.Format("IND.{0}", con.Symbol);
+            }
+
+            if (con.SecType == "CMDTY")
+            {
+                dicAssets[message.RequestId].ID = string.Format("CMDTY.{0}", con.Symbol);
+            }
+
+            if (con.SecType == "FUT")
+            {
+                dicAssets[message.RequestId].ID = string.Format("FUT.{0}.{1}", con.Symbol, con.LastTradeDateOrContractMonth);
+            }
+
+            if (con.SecType == "OPT")
+            {
+                dicAssets[message.RequestId].ID = string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0,1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
+            }
+
+            if (con.SecType == "FOP")
+            {
+                dicAssets[message.RequestId].ID = string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0, 1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
+            }
+
+            if (isDebug)
+            {
+                Console.WriteLine("Contract ID = " + dicAssets[message.RequestId].ID);
+            }
             ibClient.ClientSocket.reqMktData(message.RequestId, con, null, false, false, new List<TagValue>());
         }
 
