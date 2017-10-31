@@ -34,6 +34,14 @@ namespace TWSProxy
             set { isConnected = value; }
         }
 
+        public delegate void OnPriceHandler(OnPriceMessage msg);
+
+        public event OnPriceHandler OnPriceEvent;
+
+        public delegate void OnGreeksHandler(OnGreeksMessage msg);
+
+        public event OnGreeksHandler OnGreeksEvent;
+        
         public IBProxy(bool debug = false)
         {
             isDebug = debug;
@@ -179,6 +187,18 @@ namespace TWSProxy
                     dicAssets[msg.RequestId].Last = msg.Price;
                     break;
             }
+
+            if (OnPriceEvent != null)
+            {
+                OnPriceMessage e = new OnPriceMessage();
+                e.RequestId = msg.RequestId;
+                e.Symbol = dicAssets[msg.RequestId].Con.Symbol;
+                e.Type = TickType.getField(msg.Field);
+                e.Price = msg.Price;
+                e.PreOpen = msg.Attribs.PreOpen;
+
+                OnPriceEvent(e);
+            }
         }
 
         private void ibClient_Tick(TickSizeMessage msg)
@@ -215,6 +235,24 @@ namespace TWSProxy
             dicAssets[msg.RequestId].OptPrice = msg.OptPrice;
             dicAssets[msg.RequestId].PvDividend = msg.PvDividend;
             dicAssets[msg.RequestId].UndPrice = msg.UndPrice;
+
+            if (OnGreeksEvent != null)
+            {
+                OnGreeksMessage e = new OnGreeksMessage();
+                e.RequestId = msg.RequestId;
+                e.Symbol = dicAssets[msg.RequestId].Con.Symbol;
+                e.Type = TickType.getField(msg.Field);
+                e.Delta = msg.Delta;
+                e.Gamma = msg.Gamma;
+                e.Vega = msg.Vega;
+                e.Theta = msg.Theta;
+                e.ImpliedVolatility = msg.ImpliedVolatility;
+                e.OptPrice = msg.OptPrice;
+                e.PvDividend = msg.PvDividend;
+                e.UndPrice = msg.UndPrice;
+
+                OnGreeksEvent(e);
+            }
         }
 
         private void ibClient_NextValidId(ConnectionStatusMessage statusMessage)
@@ -402,11 +440,29 @@ namespace TWSProxy
             ibClient.ClientSocket.reqContractDetails(conId, con);
             return conId;
         }
+    }
 
+    public struct OnPriceMessage
+    {
+        public int      RequestId;
+        public string   Symbol;
+        public string   Type;
+        public double   Price;
+        public bool     PreOpen;
+    }
 
-
-
-
-
+    public struct OnGreeksMessage
+    {
+        public int RequestId;
+        public string Symbol;
+        public string Type;
+        public double Delta;
+        public double Gamma;
+        public double Vega;
+        public double Theta;
+        public double ImpliedVolatility;
+        public double OptPrice;
+        public double PvDividend;
+        public double UndPrice;
     }
 }
