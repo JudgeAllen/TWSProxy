@@ -357,6 +357,13 @@ namespace TWSProxy
                     con.SecType = "CASH";
                     con.Exchange = "IDEALPRO";
                 }
+
+                //VIX指数作为特例
+                if (symbol == "VIX")
+                {
+                    con.SecIdType = "IND";
+                    con.Exchange = "CBOE";
+                }
                 con.Symbol = symbol;
             }
             else
@@ -403,7 +410,7 @@ namespace TWSProxy
                 if (symbol.StartsWith("IND"))
                 {
                     string[] assetProperty = symbol.Split('.');
-                    con.SecType = "STK";
+                    con.SecType = "IND";
                     con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
                 }
@@ -414,6 +421,16 @@ namespace TWSProxy
                     con.SecType = "CMDTY";
                     con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
+                }
+
+                //VIX.20171220
+                string[] asset_logogram = symbol.Split('.');
+                if (asset_logogram.Length == 2)
+                {
+                    con.Symbol = asset_logogram[0];
+                    con.SecType = "FUT";
+                    con.LastTradeDateOrContractMonth = asset_logogram[1];
+                    con.Exchange = "SMART";
                 }
             }
 

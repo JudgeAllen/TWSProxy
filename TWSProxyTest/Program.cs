@@ -29,12 +29,11 @@ namespace TWSProxyTest
             proxy.OnPriceEvent += OnPrice;
             proxy.OnGreeksEvent += OnGreeks;
 
-            proxy.add("SPY");
-            proxy.add("STK.VXX");
-            proxy.add("OPT.VXX.C.20171117.35.5");
-            proxy.add("FUT.ES.20171215");
-            proxy.add("FOP.ES.C.20171215.2550");
-
+            var spy = proxy.add("SPY");
+            var vxx = proxy.add("STK.VXX");
+            var vxx_call = proxy.add("OPT.VXX.C.20171117.35.5");
+            var es = proxy.add("FUT.ES.20171215");
+            var es_call = proxy.add("FOP.ES.C.20171215.2550");
 
             Console.ReadKey();
         }
