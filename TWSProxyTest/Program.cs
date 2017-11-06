@@ -26,6 +26,7 @@ namespace TWSProxyTest
 
             proxy.connect("127.0.0.1", 7496, 10);
 
+            /*
             proxy.OnPriceEvent += OnPrice;
             proxy.OnGreeksEvent += OnGreeks;
 
@@ -35,6 +36,21 @@ namespace TWSProxyTest
             var es = proxy.add("FUT.ES.20171215");
             var es_call = proxy.add("FOP.ES.C.20171215.2550");
 
+            */
+            proxy.OnOpenOrderEvent += (msg) => {
+                Console.WriteLine("Open Order, OrderID: {0}", msg.OrderId);
+            };
+
+            proxy.OnOrderStatusEvent += (msg) =>
+            {
+                Console.WriteLine("Order Status: {0}, {1}, {2}", msg.OrderId, msg.Status, msg.WhyHeld);
+            };
+
+            Console.ReadKey();
+
+            proxy.placeOrderLMT("STK.BABA", "BUY", 200, 1.5);
+
+            
             Console.ReadKey();
         }
     }

@@ -19,11 +19,13 @@ namespace TWSProxy
 
         private int CONTRACT_ID = 1000000;
 
+        private int ORDER_ID = 1000000;
+
         private bool isConnected = false;
 
         private bool isDebug = false;
 
-        public Dictionary<int, Asset>  DicAssets
+        public Dictionary<int, Asset> DicAssets
         {
             get { return dicAssets; }
         }
@@ -41,7 +43,15 @@ namespace TWSProxy
         public delegate void OnGreeksHandler(OnGreeksMessage msg);
 
         public event OnGreeksHandler OnGreeksEvent;
-        
+
+        public delegate void OnOrderStatusHandler(OnOrderStatusMessage msg);
+
+        public event OnOrderStatusHandler OnOrderStatusEvent;
+
+        public delegate void OnOpenOrderHandler(OnOpenOrderMessage msg);
+
+        public event OnOpenOrderHandler OnOpenOrderEvent;
+
         public IBProxy(bool debug = false)
         {
             isDebug = debug;
@@ -60,7 +70,7 @@ namespace TWSProxy
             ibClient.TickSnapshotEnd += tickerId => Console.WriteLine("TickSnapshotEnd: " + tickerId + "\n");
             ibClient.NextValidId += ibClient_NextValidId;
 
-            ibClient.ContractDetails += HandleContractDataMessage;
+            ibClient.ContractDetails += ibClient_HandleContractDataMessage;
             //ibClient.ContractDetailsEnd += reqId => UpdateUI(new ContractDetailsEndMessage());
 
 
@@ -77,9 +87,9 @@ namespace TWSProxy
 
             //ibClient.UpdateAccountTime += message => accUpdatesLastUpdateValue.Text = message.Timestamp;
             ////ibClient.AccountDownloadEnd += (do nothing)
-            //ibClient.OrderStatus += orderManager.HandleOrderStatus;
+            ibClient.OrderStatus += ibClient_HandleOrderStatus;
 
-            //ibClient.OpenOrder += orderManager.handleOpenOrder;
+            ibClient.OpenOrder += ibClient_HandleOpenOrder;
             ////ibClient.OpenOrderEnd += (do nothing)
             //ibClient.ExecDetails += orderManager.HandleExecutionMessage;
             //ibClient.ExecDetailsEnd += reqId => addTextToBox("ExecDetailsEnd. " + reqId + "\n");
@@ -140,7 +150,7 @@ namespace TWSProxy
             //ibClient.historicalTickBidAsk += UpdateUI;
             //ibClient.historicalTickLast += UpdateUI;
 
-
+            ibClient.ClientSocket.reqIds(-1);
         }
         private void ibClient_Error(int id, int errorCode, string str, Exception ex)
         {
@@ -194,6 +204,7 @@ namespace TWSProxy
                 OnPriceMessage e = new OnPriceMessage();
                 e.RequestId = msg.RequestId;
                 e.Symbol = dicAssets[msg.RequestId].Con.Symbol;
+                e.AssetID = dicAssets[msg.RequestId].ID;
                 e.Type = TickType.getField(msg.Field);
                 e.Price = msg.Price;
                 e.PreOpen = msg.Attribs.PreOpen;
@@ -206,7 +217,7 @@ namespace TWSProxy
         {
             if (isDebug)
             {
-                Console.WriteLine("Tick Size. Ticker Id: {0}, Symbol: {1}, Type: {2}, Size: {3}", 
+                Console.WriteLine("Tick Size. Ticker Id: {0}, Symbol: {1}, Type: {2}, Size: {3}",
                     msg.RequestId, dicAssets[msg.RequestId].Con.Symbol, TickType.getField(msg.Field), msg.Size);
             }
 
@@ -225,9 +236,9 @@ namespace TWSProxy
         {
             if (isDebug)
             {
-                Console.WriteLine("Tick Option. Ticker Id: {0}, Symbol: {1}, Type: {2}", 
+                Console.WriteLine("Tick Option. Ticker Id: {0}, Symbol: {1}, Type: {2}",
                     msg.RequestId, dicAssets[msg.RequestId].Con.Symbol, TickType.getField(msg.Field));
-                Console.WriteLine("Delta: {0}, Gamma: {1}, Vega: {2}, Theta: {3}, IV: {4}, OptPrice: {5}, PvDividend: {6}, UndPrice: {7}", 
+                Console.WriteLine("Delta: {0}, Gamma: {1}, Vega: {2}, Theta: {3}, IV: {4}, OptPrice: {5}, PvDividend: {6}, UndPrice: {7}",
                     msg.Delta, msg.Gamma, msg.Vega, msg.Theta, msg.ImpliedVolatility, msg.OptPrice, msg.PvDividend, msg.UndPrice);
             }
 
@@ -245,6 +256,7 @@ namespace TWSProxy
                 OnGreeksMessage e = new OnGreeksMessage();
                 e.RequestId = msg.RequestId;
                 e.Symbol = dicAssets[msg.RequestId].Con.Symbol;
+                e.AssetID = dicAssets[msg.RequestId].ID;
                 e.Type = TickType.getField(msg.Field);
                 e.Delta = msg.Delta;
                 e.Gamma = msg.Gamma;
@@ -266,6 +278,8 @@ namespace TWSProxy
             if (statusMessage.IsConnected)
             {
                 Console.WriteLine("Connected! Your client Id: " + ibClient.ClientId);
+                ORDER_ID = ibClient.NextOrderId;
+                Console.WriteLine("Next Order ID: {0}", ORDER_ID);
             }
             else
             {
@@ -273,47 +287,73 @@ namespace TWSProxy
             }
         }
 
-        private void HandleContractDataMessage(ContractDetailsMessage message)
+        protected string generateAssetIDFromContract(Contract con)
         {
-            Contract con = message.ContractDetails.Summary;
-
-            dicAssets[message.RequestId].Con = con;
-
             if (con.SecType == "STK")
             {
-                dicAssets[message.RequestId].ID = string.Format("STK.{0}", con.Symbol);
+                return string.Format("STK.{0}", con.Symbol);
             }
 
             if (con.SecType == "IND")
             {
-                dicAssets[message.RequestId].ID = string.Format("IND.{0}", con.Symbol);
+                return string.Format("IND.{0}", con.Symbol);
             }
 
             if (con.SecType == "CMDTY")
             {
-                dicAssets[message.RequestId].ID = string.Format("CMDTY.{0}", con.Symbol);
+                return string.Format("CMDTY.{0}", con.Symbol);
             }
 
             if (con.SecType == "FUT")
             {
-                dicAssets[message.RequestId].ID = string.Format("FUT.{0}.{1}", con.Symbol, con.LastTradeDateOrContractMonth);
+                return string.Format("FUT.{0}.{1}", con.Symbol, con.LastTradeDateOrContractMonth);
             }
 
             if (con.SecType == "OPT")
             {
-                dicAssets[message.RequestId].ID = string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0,1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
+                return string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0, 1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
             }
 
             if (con.SecType == "FOP")
             {
-                dicAssets[message.RequestId].ID = string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0, 1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
+                return string.Format("OPT.{0}.{1}.{2}.{3}", con.Symbol, con.Right.Substring(0, 1), con.LastTradeDateOrContractMonth.Substring(0, 8), con.Strike);
             }
+
+            return "NULL";
+        }
+
+        private void ibClient_HandleContractDataMessage(ContractDetailsMessage message)
+        {
+            Contract con = message.ContractDetails.Summary;
+
+            dicAssets[message.RequestId].Con = con;
+            dicAssets[message.RequestId].ID = generateAssetIDFromContract(con);
 
             if (isDebug)
             {
                 Console.WriteLine("Contract ID = " + dicAssets[message.RequestId].ID);
             }
             ibClient.ClientSocket.reqMktData(message.RequestId, con, null, false, false, new List<TagValue>());
+        }
+
+        private void ibClient_HandleOrderStatus(OrderStatusMessage message)
+        {
+            if (OnOrderStatusEvent != null)
+            {
+                OnOrderStatusMessage msg = new OnOrderStatusMessage(message);
+
+                OnOrderStatusEvent(msg);
+            }
+        }
+
+        private void ibClient_HandleOpenOrder(OpenOrderMessage message)
+        {
+            if (OnOpenOrderEvent != null)
+            {
+                OnOpenOrderMessage msg = new OnOpenOrderMessage(message);
+
+                OnOpenOrderEvent(msg);
+            }
         }
 
         public void connect(string host, int port, int ClientID)
@@ -359,7 +399,7 @@ namespace TWSProxy
         }
 
         public int add(string symbol, string secType, string exchange, string currency, string multiplier)
-        { 
+        {
             int conId = CONTRACT_ID++;
 
             Contract con = new Contract();
@@ -377,11 +417,10 @@ namespace TWSProxy
             return conId;
         }
 
-        public int add(string symbol)
+        protected Contract generateContractFromAssetID(string assetID)
         {
-            int conId = CONTRACT_ID++;
-
             Contract con = new Contract();
+            var symbol = assetID;
 
             if (!symbol.Contains("."))
             {
@@ -471,6 +510,14 @@ namespace TWSProxy
                     con.Exchange = "SMART";
                 }
             }
+            return con;
+        }
+
+        public int add(string symbol)
+        {
+            int conId = CONTRACT_ID++;
+
+            Contract con = generateContractFromAssetID(symbol);
 
             Asset a = new Asset();
             dicAssets[conId] = a;
@@ -478,21 +525,52 @@ namespace TWSProxy
             ibClient.ClientSocket.reqContractDetails(conId, con);
             return conId;
         }
+
+        public void placeOrderMKT(string assetID, string action, double quantity)
+        {
+            int order_id = ORDER_ID++;
+
+            Contract con = generateContractFromAssetID(assetID);
+
+            Order order = new Order();
+            order.Action = action;
+            order.OrderType = "MKT";
+            order.TotalQuantity = quantity;
+
+            ibClient.ClientSocket.placeOrder(order_id, con, order);
+        }
+
+        public void placeOrderLMT(string assetID, string action, double quantity, double limitPrice)
+        {
+            int order_id = ORDER_ID++;
+
+            Contract con = generateContractFromAssetID(assetID);
+
+            Order order = new Order();
+            order.Action = action;
+            order.OrderType = "LMT";
+            order.TotalQuantity = quantity;
+            order.LmtPrice = limitPrice;
+
+            ibClient.ClientSocket.placeOrder(order_id, con, order);
+        }
     }
 
     public struct OnPriceMessage
     {
-        public int      RequestId;
-        public string   Symbol;
-        public string   Type;
-        public double   Price;
-        public bool     PreOpen;
+        public int RequestId;
+        public string Symbol;
+        public string AssetID;
+        public string Type;
+        public double Price;
+        public bool PreOpen;
     }
 
     public struct OnGreeksMessage
     {
         public int RequestId;
         public string Symbol;
+        public string AssetID;
         public string Type;
         public double Delta;
         public double Gamma;
@@ -502,5 +580,28 @@ namespace TWSProxy
         public double OptPrice;
         public double PvDividend;
         public double UndPrice;
+    }
+
+    public class OnOrderStatusMessage : OrderStatusMessage
+    {
+        public OnOrderStatusMessage(int orderId, string status, double filled, double remaining, double avgFillPrice,
+           int permId, int parentId, double lastFillPrice, int clientId, string whyHeld, double mktCapPrice) : 
+            base(orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice)
+        { }
+
+        public OnOrderStatusMessage(OrderStatusMessage msg):
+            base(msg.OrderId, msg.Status, msg.Filled, msg.Remaining, msg.AvgFillPrice, msg.PermId, msg.ParentId, msg.LastFillPrice, msg.ClientId, msg.WhyHeld, msg.MktCapPrice)
+        { }
+    }
+
+    public class OnOpenOrderMessage: OpenOrderMessage
+    {
+        public OnOpenOrderMessage(int orderId, Contract contract, Order order, OrderState orderState) :
+            base(orderId, contract, order, orderState)
+        { }
+
+        public OnOpenOrderMessage(OpenOrderMessage msg):
+            base(msg.OrderId, msg.Contract, msg.Order, msg.OrderState)
+        { }
     }
 }
