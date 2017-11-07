@@ -49,6 +49,7 @@ namespace TWSProxyTest
             Console.ReadKey();
 
             proxy.placeOrderLMT("STK.BABA", "BUY", 200, 1.5);
+            Console.WriteLine("Order Placed.");
 
             
             Console.ReadKey();
