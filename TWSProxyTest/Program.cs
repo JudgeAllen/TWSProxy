@@ -51,7 +51,9 @@ namespace TWSProxyTest
             proxy.placeOrderLMT("STK.BABA", "BUY", 200, 1.5);
             Console.WriteLine("Order Placed.");
 
-            
+            proxy.placeOrderLMT("OPT.VXX.P.20171110.33.5", "BUY", 2, 0.01);
+            Console.WriteLine("Order Placed.");
+
             Console.ReadKey();
         }
     }
