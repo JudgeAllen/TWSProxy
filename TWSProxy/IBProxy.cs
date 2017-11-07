@@ -420,6 +420,8 @@ namespace TWSProxy
         protected Contract generateContractFromAssetID(string assetID)
         {
             Contract con = new Contract();
+            con.Currency = "USD";
+
             var symbol = assetID;
 
             if (!symbol.Contains("."))
@@ -442,6 +444,8 @@ namespace TWSProxy
                     con.Exchange = "CBOE";
                 }
                 con.Symbol = symbol;
+
+                return con;
             }
             else
             {
@@ -452,6 +456,7 @@ namespace TWSProxy
                     con.SecType = "STK";
                     con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
+                    return con;
                 }
                 //OPT.SPY.C.20171006.244
                 if (symbol.StartsWith("OPT"))
@@ -462,7 +467,7 @@ namespace TWSProxy
                     con.Right = assetProperty[2];
                     con.LastTradeDateOrContractMonth = assetProperty[3];
                     con.Strike = double.Parse(assetProperty[4]);
-
+                    return con;
                 }
                 //FUT.ES.20171215
                 if (symbol.StartsWith("FUT"))
@@ -471,7 +476,7 @@ namespace TWSProxy
                     con.SecType = "FUT";
                     con.Symbol = assetProperty[1];
                     con.LastTradeDateOrContractMonth = assetProperty[2];
-
+                    return con;
                 }
                 //FOP.ES.C.20171117.2550
                 if (symbol.StartsWith("FOP"))
@@ -482,6 +487,7 @@ namespace TWSProxy
                     con.Right = assetProperty[2];
                     con.LastTradeDateOrContractMonth = assetProperty[3];
                     con.Strike = double.Parse(assetProperty[4]);
+                    return con;
                 }
                 //IND.VIX
                 if (symbol.StartsWith("IND"))
@@ -490,6 +496,7 @@ namespace TWSProxy
                     con.SecType = "IND";
                     con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
+                    return con;
                 }
                 //CMDTY.XAUUSD
                 if (symbol.StartsWith("CMDTY"))
@@ -498,6 +505,7 @@ namespace TWSProxy
                     con.SecType = "CMDTY";
                     con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
+                    return con;
                 }
 
                 //VIX.20171220
@@ -508,6 +516,7 @@ namespace TWSProxy
                     con.SecType = "FUT";
                     con.LastTradeDateOrContractMonth = asset_logogram[1];
                     con.Exchange = "SMART";
+                    return con;
                 }
             }
             return con;
@@ -545,6 +554,12 @@ namespace TWSProxy
             int order_id = ORDER_ID++;
 
             Contract con = generateContractFromAssetID(assetID);
+
+            Console.WriteLine(con.Symbol);
+            Console.WriteLine(con.Currency);
+            Console.WriteLine(con.SecType);
+            Console.WriteLine(con.Exchange);
+
 
             Order order = new Order();
             order.Action = action;
