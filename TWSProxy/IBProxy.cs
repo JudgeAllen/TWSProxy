@@ -463,6 +463,7 @@ namespace TWSProxy
                 {
                     string[] assetProperty = symbol.Split(new char[] { '.' }, 5);
                     con.SecType = "OPT";
+                    con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
                     con.Right = assetProperty[2];
                     con.LastTradeDateOrContractMonth = assetProperty[3];
@@ -474,6 +475,7 @@ namespace TWSProxy
                 {
                     string[] assetProperty = symbol.Split(new char[] { '.' }, 3);
                     con.SecType = "FUT";
+                    con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
                     con.LastTradeDateOrContractMonth = assetProperty[2];
                     return con;
@@ -483,6 +485,7 @@ namespace TWSProxy
                 {
                     string[] assetProperty = symbol.Split(new char[] { '.' }, 5);
                     con.SecType = "FOP";
+                    con.Exchange = "SMART";
                     con.Symbol = assetProperty[1];
                     con.Right = assetProperty[2];
                     con.LastTradeDateOrContractMonth = assetProperty[3];
