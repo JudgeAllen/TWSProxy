@@ -12,6 +12,10 @@ namespace TWSProxy
     public partial class IBProxy
     {
         private Dictionary<int, Asset> dicAssets = new Dictionary<int, Asset>();
+        private Dictionary<string, Contract> dicContract = new Dictionary<string, Contract>();
+
+        private ReaderWriterLock rwLock = new ReaderWriterLock();
+        private AutoResetEvent autoEvent = new AutoResetEvent(false);
 
         protected IBClient ibClient;
 
@@ -326,14 +330,53 @@ namespace TWSProxy
         {
             Contract con = message.ContractDetails.Summary;
 
+            var assetID = generateAssetIDFromContract(con);
             dicAssets[message.RequestId].Con = con;
-            dicAssets[message.RequestId].ID = generateAssetIDFromContract(con);
+            dicAssets[message.RequestId].ID = assetID;
+
+            // 此处与下面程序重复逻辑是为了规避已经订阅价格的合约信息被重复获取的问题
+            rwLock.AcquireWriterLock(1000);
+            try
+            {
+                dicContract[assetID] = con;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                rwLock.ReleaseWriterLock();
+            }
 
             if (isDebug)
             {
                 Console.WriteLine("Contract ID = " + dicAssets[message.RequestId].ID);
             }
             ibClient.ClientSocket.reqMktData(message.RequestId, con, null, false, false, new List<TagValue>());
+        }
+
+        private void ibClient_HandleContractDataMessageSignal(ContractDetailsMessage message)
+        {
+            Contract con = message.ContractDetails.Summary;
+
+            var assetID = generateAssetIDFromContract(con);
+            
+            rwLock.AcquireWriterLock(1000);
+            try
+            {
+                dicContract[assetID] = con;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                rwLock.ReleaseWriterLock();
+            }
+
+            autoEvent.Set();
         }
 
         private void ibClient_HandleOrderStatus(OrderStatusMessage message)
@@ -525,6 +568,148 @@ namespace TWSProxy
             return con;
         }
 
+        protected Contract generateContractFromComboAssetID(string comboAssetID)
+        {
+            Contract con = new Contract();
+            con.Currency = "USD";
+            con.Exchange = "SMART";
+            con.SecType = "BAG";
+            con.Symbol = "";
+            con.ComboLegs = new List<ComboLeg>();
+
+            List<Contract> sub_contracts = new List<Contract>();
+            List<string> asset_ids = new List<string>();
+
+            var combo_IDs = comboAssetID.Split('|');
+            foreach (var combo_id in combo_IDs)
+            {
+                var combo_parts = combo_id.Split('*');
+                if (combo_parts.Length != 2)
+                {
+                    throw new FormatException(String.Format("Format Error: {0}", comboAssetID));
+                }
+                Contract sub_con = generateContractFromAssetID(combo_parts[1]);
+                sub_contracts.Add(sub_con);
+                asset_ids.Add(combo_parts[1]);
+
+                bool bFindCon = false;
+                for (int i = 0; i < sub_contracts.Count - 1; ++i)
+                {
+                    if (sub_contracts[i].Symbol == sub_con.Symbol && sub_contracts[i].SecType == sub_con.SecType)
+                    {
+                        bFindCon = true;
+                        break;
+                    }
+                }
+                if (!bFindCon)
+                {
+                    if (con.Symbol == "")
+                        con.Symbol = sub_con.Symbol;
+                    else
+                        con.Symbol += ", " + sub_con.Symbol;
+                }
+
+                ComboLeg leg = new ComboLeg();
+                leg.ConId = -1;
+                leg.Exchange = "SMART";
+
+                int ratio = Convert.ToInt32(combo_parts[0]);
+                if (ratio >= 0)
+                {
+                    leg.Ratio = ratio;
+                    leg.Action = "BUY";
+                }
+                else
+                {
+                    leg.Ratio = -ratio;
+                    leg.Action = "SELL";
+                }
+                con.ComboLegs.Add(leg);
+            }
+
+            // 处理ConId逻辑
+            // 先不触发reqContractDetails，来获取ConId
+            bool bConIdLeft = false;
+
+            rwLock.AcquireReaderLock(1000);
+            try
+            {
+                for (int i = 0; i < sub_contracts.Count; ++i)
+                {
+                    if (con.ComboLegs[i].ConId == -1)
+                    {
+                        if (dicContract.ContainsKey(asset_ids[i]))
+                        {
+                            var find_con = dicContract[asset_ids[i]];
+                            con.ComboLegs[i].ConId = find_con.ConId;
+                        }
+                        else
+                        {
+                            if (!bConIdLeft)
+                            {
+                                bConIdLeft = true;
+                                ibClient.ContractDetails += ibClient_HandleContractDataMessageSignal;
+                                ibClient.ClientSocket.reqContractDetails(CONTRACT_ID++, sub_contracts[i]);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                rwLock.ReleaseReaderLock();
+            }
+
+            if (!bConIdLeft)
+                return con;
+
+            // 触发reqContractDetails来获取ConId
+            while (bConIdLeft)
+            {
+                autoEvent.WaitOne(5000);
+                if (isDebug)
+                {
+                    Console.WriteLine("Got an auto event.");
+                }
+
+                bConIdLeft = false;
+                rwLock.AcquireReaderLock(1000);
+                try
+                {
+                    for (int i = 0; i < sub_contracts.Count; ++i)
+                    {
+                        if (con.ComboLegs[i].ConId == -1)
+                        {
+                            if (dicContract.ContainsKey(asset_ids[i]))
+                            {
+                                var find_con = dicContract[asset_ids[i]];
+                                con.ComboLegs[i].ConId = find_con.ConId;
+                            }
+                            else
+                            {
+                                bConIdLeft = true;
+                            }
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw e;
+                }
+                finally
+                {
+                    rwLock.ReleaseReaderLock();
+                }
+            }
+            
+            ibClient.ContractDetails -= ibClient_HandleContractDataMessageSignal;
+            return con;
+        }
+
         public int add(string symbol)
         {
             int conId = CONTRACT_ID++;
@@ -558,15 +743,52 @@ namespace TWSProxy
 
             Contract con = generateContractFromAssetID(assetID);
 
-            Console.WriteLine(con.Symbol);
-            Console.WriteLine(con.Currency);
-            Console.WriteLine(con.SecType);
-            Console.WriteLine(con.Exchange);
-
-
             Order order = new Order();
             order.Action = action;
             order.OrderType = "LMT";
+            order.TotalQuantity = quantity;
+            order.LmtPrice = limitPrice;
+
+            ibClient.ClientSocket.placeOrder(order_id, con, order);
+        }
+
+        public void placeOrderComboMKT(string comboAssetID, string action, double quantity)
+        {
+            int order_id = ORDER_ID++;
+
+            Contract con = generateContractFromComboAssetID(comboAssetID);
+
+            Order order = new Order();
+            order.Action = action;
+            order.OrderType = "MKT";
+            order.TotalQuantity = quantity;
+
+            ibClient.ClientSocket.placeOrder(order_id, con, order);
+        }
+
+        public void placeOrderComboRELMKT(string comboAssetID, string action, double quantity)
+        {
+            int order_id = ORDER_ID++;
+
+            Contract con = generateContractFromComboAssetID(comboAssetID);
+
+            Order order = new Order();
+            order.Action = action;
+            order.OrderType = "REL + MKT";
+            order.TotalQuantity = quantity;
+
+            ibClient.ClientSocket.placeOrder(order_id, con, order);
+        }
+
+        public void placeOrderComboRELLMT(string comboAssetID, string action, double quantity, double limitPrice)
+        {
+            int order_id = ORDER_ID++;
+
+            Contract con = generateContractFromComboAssetID(comboAssetID);
+
+            Order order = new Order();
+            order.Action = action;
+            order.OrderType = "REL + LMT";
             order.TotalQuantity = quantity;
             order.LmtPrice = limitPrice;
 
